@@ -1,0 +1,43 @@
+pipeline {
+    agent any
+    environment {
+        AWS_ACCOUNT_ID = "your-aws-account-id"
+        AWS_REGION = "us-east-1"
+        ECR_REPO_API = "dotnet-api"
+        ECR_REPO_FRONTEND = "html-frontend"
+    }
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-username/dotnet-html-app.git'
+            }
+        }
+        stage('Build & Push .NET API') {
+            steps {
+                script {
+                    sh "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+                    sh "docker build -t $ECR_REPO_API ./DotnetAPI"
+                    sh "docker tag $ECR_REPO_API:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_API:latest"
+                    sh "docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_API:latest"
+                }
+            }
+        }
+        stage('Build & Push HTML Frontend') {
+            steps {
+                script {
+                    sh "docker build -t $ECR_REPO_FRONTEND ./frontend"
+                    sh "docker tag $ECR_REPO_FRONTEND:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_FRONTEND:latest"
+                    sh "docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_FRONTEND:latest"
+                }
+            }
+        }
+        stage('Deploy to EKS') {
+            steps {
+                script {
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                    sh "kubectl apply -f k8s/service.yaml"
+                }
+            }
+        }
+    }
+}
